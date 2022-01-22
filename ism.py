@@ -1,0 +1,101 @@
+#!/usr/bin/python3
+
+import argparse
+import datetime as dt
+import logging
+import importlib
+import json
+import os
+import requests
+import RPi.GPIO as GPIO
+import signal
+import sys
+import threading
+import time
+
+
+# app_dir: the app's real address on the filesystem
+app_dir = os.path.dirname(os.path.realpath(__file__))
+app_name = 'IR Sensor Monitor'
+debug_mode = False
+settings_path = os.path.join(app_dir, 'settings.json')
+settings = None
+stop_signal = False
+
+def stop_signal_handler(*args):
+
+    global stop_signal
+    stop_signal = True
+    logging.info(f'Signal [{args[0]}] received, exiting')
+    sys.exit(0)
+
+
+def monitor_thread():
+
+    signal_pin = settings['app']['signal_pin']
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(signal_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    while stop_signal is False:
+        sensor_state = GPIO.input(signal_pin)
+        if sensor_state == 1:
+            logging.info('human detected')
+            for api in settings['app']['restful_apis']:
+                url = api
+                start = dt.datetime.now()
+                r = requests.get(url=url)
+                response_timestamp = dt.datetime.now()
+                response_time = int((response_timestamp - start).
+                                    total_seconds() * 1000)
+
+                logging.info(f'response_text: {r.text}, '
+                            f'status_code: {r.status_code}, '
+                            f'response_time: {response_time}ms')
+            time.sleep(1)
+        else:
+            logging.debug('human NOT detected')
+        time.sleep(0.1)
+
+
+def main():
+
+    global settings, debug_mode
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--debug', dest='debug', action='store_true')
+    args = vars(ap.parse_args())
+    debug_mode = args['debug']
+
+    with open(settings_path, 'r') as json_file:
+        json_str = json_file.read()
+        settings = json.loads(json_str)
+
+    os.environ['REQUESTS_CA_BUNDLE'] = settings['app']['ca_path']
+
+    signal.signal(signal.SIGINT, stop_signal_handler)
+    signal.signal(signal.SIGTERM, stop_signal_handler)
+
+    logging.basicConfig(
+        filename=settings['app']['log_path'],
+        level=logging.DEBUG if debug_mode else logging.INFO,
+        format='%(asctime)s %(levelname)06s - %(funcName)s: %(message)s',
+        datefmt='%Y%m%d-%H%M%S',
+    )
+    logging.info(f'{app_name} started')
+
+    emailer = importlib.machinery.SourceFileLoader(
+                        'emailer',
+                        settings['email']['path']).load_module()
+    th_email = threading.Thread(target=emailer.send_service_start_notification,
+                                kwargs={'settings_path': settings_path,
+                                        'service_name': f'{app_name}',
+                                        'path_of_logs_to_send': settings['app']['log_path'],
+                                        'delay': 0 if debug_mode else 300})
+    th_email.start()
+    th_monitor = threading.Thread(target=monitor_thread, args=())
+    th_monitor.start()
+
+
+if __name__ == '__main__':
+
+    main()
+    

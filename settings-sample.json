@@ -1,0 +1,18 @@
+{
+  "app": {
+      "log_path": "/tmp/ir-sensor-monitor.log",
+      "ca_path": "/tmp/ca.crt",
+      "signal_pin": 26,
+      "restful_apis": ["https://localhost/apis/endpoint"]
+  },
+  "email": {
+      "from_address": "admin@localhost",
+      "from_password": "password",
+      "from_name": "Sender",
+      "from_host": "localhost",
+      "from_port": 587,
+      "to_address": "admin@localhost",
+      "to_name": "Admin Account",
+      "path": "/tmp/emailer/emailer.py"
+  }
+}
