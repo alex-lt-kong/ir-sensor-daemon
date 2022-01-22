@@ -9,6 +9,7 @@ import os
 import requests
 import RPi.GPIO as GPIO
 import signal
+import sqlite3
 import sys
 import threading
 import time
@@ -21,6 +22,16 @@ debug_mode = False
 settings_path = os.path.join(app_dir, 'settings.json')
 settings = None
 stop_signal = False
+
+
+def make_sure_table_exists(con):
+    cur = con.cursor()
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS DetectionRecords (
+        timestamp   TEXT)
+    ''')
+    con.commit()
+
 
 def stop_signal_handler(*args):
 
@@ -37,6 +48,11 @@ def monitor_thread():
 
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(signal_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    con = sqlite3.connect('detection-records.sqlite')
+    make_sure_table_exists(con)
+    con.close()
+
     while stop_signal is False:
         sensor_state = GPIO.input(signal_pin)
         if sensor_state == 1:
@@ -50,8 +66,17 @@ def monitor_thread():
                                     total_seconds() * 1000)
 
                 logging.info(f'response_text: {r.text}, '
-                            f'status_code: {r.status_code}, '
-                            f'response_time: {response_time}ms')
+                             f'status_code: {r.status_code}, '
+                             f'response_time: {response_time}ms')
+
+            con = sqlite3.connect('detection-records.sqlite')
+            cur = con.cursor()
+            cur.execute(
+                'INSERT INTO DetectionRecords (timestamp) VALUES (?);',
+                [dt.datetime.now()])
+            con.commit()
+            con.close()
+            
             time.sleep(1)
         else:
             logging.debug('human NOT detected')
