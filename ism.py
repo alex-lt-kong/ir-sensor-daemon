@@ -49,7 +49,7 @@ def monitor_thread():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(signal_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    con = sqlite3.connect('detection-records.sqlite')
+    con = sqlite3.connect(os.path.join(app_dir, 'detection-records.sqlite'))
     make_sure_table_exists(con)
     con.close()
 
@@ -69,7 +69,7 @@ def monitor_thread():
                              f'status_code: {r.status_code}, '
                              f'response_time: {response_time}ms')
 
-            con = sqlite3.connect('detection-records.sqlite')
+            con = sqlite3.connect(os.path.join(app_dir, 'detection-records.sqlite'))
             cur = con.cursor()
             cur.execute(
                 'INSERT INTO DetectionRecords (timestamp) VALUES (?);',
