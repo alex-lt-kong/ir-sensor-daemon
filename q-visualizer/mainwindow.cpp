@@ -2,12 +2,50 @@
 #include "ui_mainwindow.h"
 #include <QtCharts>
 #include <iostream>
+#include <sqlite3.h>
 
 using namespace std;
 
-void MainWindow::DisplayLineChart()
+
+
+int MainWindow::ReadDataFromDB(QLineSeries *series)
 {
-    QLineSeries *series = new QLineSeries();
+    sqlite3* dbPtr;
+    int retval = sqlite3_open("./../detection-records.sqlite", &dbPtr);
+    if (retval != SQLITE_OK) {
+        cerr << "Unable to open the DB: " << sqlite3_errmsg(dbPtr) << endl;
+        return (retval);
+    }
+    string query = "SELECT DATE(timestamp) AS 'Date', COUNT(*) AS 'RecordCount' "
+                   "FROM DetectionRecords "
+                   "GROUP BY DATE(timestamp)";
+
+    /*
+    Signature of
+    int sqlite3_exec(
+      sqlite3*,                                  // An open database
+      const char *sql,                           // SQL to be evaluated
+      int (*callback)(void*,int,char**,char**),  // Callback function
+      void *,                                    // 1st argument to callback
+      char **errmsg                              // Error msg written here
+    );
+    If the 5th parameter to sqlite3_exec() is not NULL then any error message is written into
+    memory obtained from sqlite3_malloc() and passed back through the 5th parameter. To avoid
+    memory leaks, the application should invoke sqlite3_free() on error message strings returned
+    through the 5th parameter of sqlite3_exec() after the error message string is no longer needed.
+    */
+    retval = sqlite3_exec(dbPtr, query.c_str(), OnRowFetched, NULL, NULL);
+
+    if(retval != SQLITE_OK ) {
+        cerr <<"SQL error: " << sqlite3_errmsg(dbPtr) << endl;
+        sqlite3_close(dbPtr);
+        return retval;
+    }
+    return 0;
+}
+
+void MainWindow::DisplayLineChart(QLineSeries *series)
+{
     QDateTime momentInTime;
     momentInTime.setDate(QDate(2020,1,1));
     series->append(momentInTime.toMSecsSinceEpoch(), 12);
@@ -46,7 +84,9 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    this->DisplayLineChart();
+    QLineSeries *series = new QLineSeries();
+    this->ReadDataFromDB(series);
+    this->DisplayLineChart(series);
 
 }
 
