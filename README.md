@@ -7,12 +7,12 @@ Python script used to read the state from an HC-SR501 Passive Infrared sensor
 ### HC-SR501 Sensor
 <img src="./images/sensor.jpg" style="max-width:150px" />
 
-### `ism.py` in Python
+### State monitor `ism.py` in Python
 
 * Read states from the sensor;
 * Notify downstream application by calling RESTful APIs;
 * Record detection events to a SQLite database.
 
-### Desktop detection visualizer in C++/Qt
+### Detection records visualizer `q-visualizer` in C++/Qt
 
 * Read detection records and plot a linechart in C++/Qt
