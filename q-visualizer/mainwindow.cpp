@@ -20,46 +20,49 @@ int MainWindow::ReadDataFromDB(QLineSeries *series)
                    "FROM DetectionRecords "
                    "GROUP BY DATE(timestamp)";
 
-    /*
-    Signature of
-    int sqlite3_exec(
-      sqlite3*,                                  // An open database
-      const char *sql,                           // SQL to be evaluated
-      int (*callback)(void*,int,char**,char**),  // Callback function
-      void *,                                    // 1st argument to callback
-      char **errmsg                              // Error msg written here
-    );
-    If the 5th parameter to sqlite3_exec() is not NULL then any error message is written into
-    memory obtained from sqlite3_malloc() and passed back through the 5th parameter. To avoid
-    memory leaks, the application should invoke sqlite3_free() on error message strings returned
-    through the 5th parameter of sqlite3_exec() after the error message string is no longer needed.
-    */
-    retval = sqlite3_exec(dbPtr, query.c_str(), OnRowFetched, NULL, NULL);
-
-    if(retval != SQLITE_OK ) {
-        cerr <<"SQL error: " << sqlite3_errmsg(dbPtr) << endl;
+    sqlite3_stmt *stmt;
+    retval = sqlite3_prepare_v2(dbPtr, query.c_str(), -1, &stmt, NULL);
+    if (retval != SQLITE_OK) {
+        cerr << "error: " << sqlite3_errmsg(dbPtr) << endl;
         sqlite3_close(dbPtr);
-        return retval;
+        return (retval);
     }
-    return 0;
+    while ((retval = sqlite3_step(stmt)) == SQLITE_ROW) {
+        const unsigned char *date = sqlite3_column_text(stmt, 0);
+        // `unsigned char` is a character datatype where the variable consumes all the 8
+        // bits of the memory and there is no sign bit (which is there in signed char);
+        // `char` may be unsigned or signed depending on your platform;
+        // In C, `char` is just another integral type
+        int count = sqlite3_column_int(stmt, 1);
+        char* year = new char[4];
+        char* month = new char[2];
+        char* day = new char[2];
+        memcpy(year, date, 4);
+        memcpy(month, date+5, 2);
+        memcpy(day, date+8, 2);
+        QDateTime momentInTime;
+        momentInTime.setDate(QDate(atoi(year), atoi(month), atoi(day)));
+        series->append(momentInTime.toMSecsSinceEpoch(), count);
+        delete[] year;
+        delete[] month;
+        delete[] day;
+        // The series must have at least two data points for the plotting function to work.
+    }
+    if (retval != SQLITE_DONE) {
+        cerr << "error: " << sqlite3_errmsg(dbPtr) << endl;
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(dbPtr);
+
+    return retval;
 }
 
 void MainWindow::DisplayLineChart(QLineSeries *series)
 {
-    QDateTime momentInTime;
-    momentInTime.setDate(QDate(2020,1,1));
-    series->append(momentInTime.toMSecsSinceEpoch(), 12);
-    QDateTime momentInTime1;
-    momentInTime1.setDate(QDate(2020,1,3));
-    series->append(momentInTime1.toMSecsSinceEpoch(), 15);
-    QDateTime momentInTime2;
-    momentInTime2.setDate(QDate(2020,1,5));
-    series->append(momentInTime2.toMSecsSinceEpoch(), -5);
-
     QChart *chart = new QChart();
     chart->legend()->hide();
     chart->addSeries(series);
-    chart->setTitle("Simple line chart example");
+    chart->setTitle("Detection Count by Date");
 
     QDateTimeAxis *axisX = new QDateTimeAxis;
     axisX->setTickCount(3);
@@ -70,7 +73,7 @@ void MainWindow::DisplayLineChart(QLineSeries *series)
 
     QValueAxis *axisY = new QValueAxis;
     axisY->setLabelFormat("%i");
-    axisY->setTitleText("Sunspots count");
+    axisY->setTitleText("Detection Count");
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
@@ -94,11 +97,3 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
-
-
-void MainWindow::on_pushButton_clicked()
-{
-   // cout << "clicked!" << endl;
-    //this->DisplayLineChart();
-}
-
