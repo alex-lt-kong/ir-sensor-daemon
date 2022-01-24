@@ -8,7 +8,7 @@ using namespace std;
 
 
 
-int MainWindow::ReadDataFromDB(QLineSeries *series)
+int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
 {
     sqlite3* dbPtr;
     int retval = sqlite3_open("./../detection-records.sqlite", &dbPtr);
@@ -43,6 +43,8 @@ int MainWindow::ReadDataFromDB(QLineSeries *series)
         QDateTime momentInTime;
         momentInTime.setDate(QDate(atoi(year), atoi(month), atoi(day)));
         series->append(momentInTime.toMSecsSinceEpoch(), count);
+        if (minVal > count) minVal = count;
+        if (maxVal < count) maxVal = count;
         delete[] year;
         delete[] month;
         delete[] day;
@@ -57,7 +59,7 @@ int MainWindow::ReadDataFromDB(QLineSeries *series)
     return retval;
 }
 
-void MainWindow::DisplayLineChart(QLineSeries *series)
+void MainWindow::DisplayLineChart(QLineSeries *series, int minVal, int maxVal)
 {
     QChart *chart = new QChart();
     chart->legend()->hide();
@@ -74,6 +76,8 @@ void MainWindow::DisplayLineChart(QLineSeries *series)
     QValueAxis *axisY = new QValueAxis;
     axisY->setLabelFormat("%i");
     axisY->setTitleText("Detection Count");
+    axisY->setMin(minVal * 0.5);
+    axisY->setMax(maxVal * 1.1);
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
@@ -88,8 +92,9 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     QLineSeries *series = new QLineSeries();
-    this->ReadDataFromDB(series);
-    this->DisplayLineChart(series);
+    int minVal = 2147483647, maxVal= 0;
+    this->ReadDataFromDB(series, minVal, maxVal);
+    this->DisplayLineChart(series, minVal, maxVal);
 
 }
 

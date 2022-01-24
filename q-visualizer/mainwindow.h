@@ -18,8 +18,8 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    void DisplayLineChart(QLineSeries *series);
-    int ReadDataFromDB(QLineSeries *series);
+    void DisplayLineChart(QLineSeries *series, int minVal, int maxVal);
+    int ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal);
 
 private:
     Ui::MainWindow *ui;
