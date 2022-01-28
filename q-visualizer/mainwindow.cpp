@@ -3,15 +3,85 @@
 #include <QtCharts>
 #include <iostream>
 #include <sqlite3.h>
+#include <curl/curl.h>
+#include <QApplication>
+#include <QThread>
 
 using namespace std;
 
+struct FtpFile {
+  const char *filename;
+  FILE *stream;
+};
 
+static size_t my_fwrite(void *buffer, size_t size, size_t nmemb,
+                        void *stream)
+{
+  struct FtpFile *out = (struct FtpFile *)stream;
+  if(!out->stream) {
+    /* open file for writing */
+    out->stream = fopen(out->filename, "wb");
+    if(!out->stream)
+      return -1; /* failure, cannot open file to write */
+  }
+  return fwrite(buffer, size, nmemb, out->stream);
+}
+
+
+int MainWindow::getDBFromSFTP()
+{
+    QSettings settings("ak-studio", "ir-sensor-monitor");
+    // ~/.config/ak-studio/ir-sensor-monitor.conf
+    CURL *curl;
+    CURLcode res;
+    struct FtpFile ftpfile = {
+      "detection-records.sqlite", /* name to store the file as if successful */
+      NULL
+    };
+
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
+    curl = curl_easy_init();
+    if(curl) {
+      curl_easy_setopt(curl, CURLOPT_URL, settings.value("SFTP_URI").toString().toStdString().c_str());
+      /* Define our callback to get called when there's data to be written */
+      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, my_fwrite);
+      /* Set a pointer to our struct to pass to the callback */
+      curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ftpfile);
+      curl_easy_setopt(curl, CURLOPT_SSH_HOST_PUBLIC_KEY_MD5, settings.value("MD5").toString().toStdString().c_str());
+      curl_easy_setopt(curl, CURLOPT_SSH_AUTH_TYPES, CURLSSH_AUTH_PUBLICKEY);
+      // the public/private key pair has to be in PEM format
+      // If you use ssh-keygen to generate the key pair, it may NOT in PEM format
+      // by default!
+      curl_easy_setopt(curl, CURLOPT_SSH_PUBLIC_KEYFILE , settings.value("SFTP_public_key").toString().toStdString().c_str());
+      curl_easy_setopt(curl, CURLOPT_SSH_PRIVATE_KEYFILE, settings.value("SFTP_private_key").toString().toStdString().c_str());
+
+      /* Switch on full protocol/debug output */
+      curl_easy_setopt(curl, CURLOPT_VERBOSE, this->ui->checkBoxVerboseLogging->isChecked() ? 1L : 0);
+
+      res = curl_easy_perform(curl);
+
+      /* always cleanup */
+      curl_easy_cleanup(curl);
+
+      if(CURLE_OK != res) {
+        /* we failed */
+        cerr << "Error: cURL statue code: " << res << endl;
+      }
+    }
+
+    if(ftpfile.stream)
+      fclose(ftpfile.stream); /* close the local file */
+
+    curl_global_cleanup();
+
+    return 0;
+}
 
 int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
 {
     sqlite3* dbPtr;
-    int retval = sqlite3_open("./../detection-records.sqlite", &dbPtr);
+    int retval = sqlite3_open("./detection-records.sqlite", &dbPtr);
     if (retval != SQLITE_OK) {
         cerr << "Unable to open the DB: " << sqlite3_errmsg(dbPtr) << endl;
         return (retval);
@@ -81,9 +151,10 @@ void MainWindow::DisplayLineChart(QLineSeries *series, int minVal, int maxVal)
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
-    QChartView *chartView = new QChartView(chart);
-    chartView->setRenderHint(QPainter::Antialiasing);
-    this->setCentralWidget(chartView);
+    // this graphicsView is "promoted to" a QChartView
+    // https://stackoverflow.com/questions/48362864/how-to-insert-qchartview-in-form-with-qt-designer
+    this->ui->graphicsView->setChart(chart);
+
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -91,14 +162,24 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    QLineSeries *series = new QLineSeries();
-    int minVal = 2147483647, maxVal= 0;
-    this->ReadDataFromDB(series, minVal, maxVal);
-    this->DisplayLineChart(series, minVal, maxVal);
-
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
 }
+
+void MainWindow::on_pushButtonLoad_clicked()
+{
+    this->ui->pushButtonLoad->setEnabled(false);
+    this->ui->plainTextEdit->insertPlainText("Fetching database file from remote...\n");
+    qApp->processEvents();
+    this->getDBFromSFTP();
+    this->ui->plainTextEdit->insertPlainText("Done\n");
+    QLineSeries *series = new QLineSeries();
+    int minVal = 2147483647, maxVal= 0;
+    this->ReadDataFromDB(series, minVal, maxVal);
+    this->DisplayLineChart(series, minVal, maxVal);
+    this->ui->pushButtonLoad->setEnabled(true);
+}
+

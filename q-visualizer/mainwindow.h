@@ -20,6 +20,10 @@ public:
     ~MainWindow();
     void DisplayLineChart(QLineSeries *series, int minVal, int maxVal);
     int ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal);
+    int getDBFromSFTP();
+
+private slots:
+      void on_pushButtonLoad_clicked();
 
 private:
     Ui::MainWindow *ui;

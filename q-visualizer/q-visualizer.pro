@@ -19,6 +19,7 @@ FORMS += \
     mainwindow.ui
 
 LIBS += -lsqlite3
+LIBS += -lcurl
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
