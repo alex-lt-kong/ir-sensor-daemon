@@ -9,6 +9,7 @@
 #include <qprocess.h>
 #include <sqlite3.h>
 #include <time.h>
+#include <stdio.h>
 
 using namespace std;
 
@@ -62,6 +63,17 @@ int MainWindow::GetDBFromSFTP()
     return 0;
 }
 
+time_t MainWindow::DateStringToSecSinceEpoch(const char *time_str)
+{
+    struct tm tm = { 0 };
+
+    if (!strptime(time_str, "%Y-%m-%d", &tm))
+        return (time_t)-1;
+
+    return mktime(&tm) - timezone;
+}
+
+
 int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
 {
     sqlite3* dbPtr;
@@ -88,25 +100,13 @@ int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
         // `char` may be unsigned or signed depending on your platform;
         // In C, `char` is just another integral type
         int count = sqlite3_column_int(stmt, 1);
-        char* year = new char[4];
-        char* month = new char[2];
-        char* day = new char[2];
-        memcpy(year, date, 4);
-        memcpy(month, date+5, 2);
-        memcpy(day, date+8, 2);
-        QDateTime momentInTime;
-        momentInTime.setDate(QDate(atoi(year), atoi(month), atoi(day)));
-        series->append(momentInTime.toMSecsSinceEpoch(), count);
+        series->append(DateStringToSecSinceEpoch((char*)date) * 1000, count);
         if (minVal > count) minVal = count;
         if (maxVal < count) maxVal = count;
-        //delete[] year;
-        //delete[] month;
-        //delete[] day;
-        // seems cannot delete[] year,month,day...
         // The series must have at least two data points for the plotting function to work.
     }
     if (retval != SQLITE_DONE) {
-        cerr << "error: " << sqlite3_errmsg(dbPtr) << endl;
+        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "SQLite3 error: " + sqlite3_errmsg(dbPtr));
     }
     sqlite3_finalize(stmt);
     sqlite3_close(dbPtr);
@@ -191,10 +191,13 @@ void MainWindow::on_pushButtonLoad_clicked()
     qApp->processEvents();
 
     this->ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Fetching latest database file from remote...\n");
+    this->ui->plainTextEdit->verticalScrollBar()->setValue(ui->plainTextEdit->verticalScrollBar()->maximum());
     qApp->processEvents();
+
     this->GetDBFromSFTP();
     this->ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Done\n");
     qApp->processEvents();
+
     this->ui->plainTextEdit->verticalScrollBar()->setValue(ui->plainTextEdit->verticalScrollBar()->maximum() - 1);
     QLineSeries *series = new QLineSeries();
     int minVal = 2147483647, maxVal= 0;

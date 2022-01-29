@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>850</width>
-    <height>533</height>
+    <width>929</width>
+    <height>688</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,9 +18,9 @@
     <normaloff>resources/line-chart.png</normaloff>resources/line-chart.png</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout_2">
+   <layout class="QVBoxLayout" name="verticalLayout_2" stretch="5">
     <item>
-     <layout class="QVBoxLayout" name="verticalLayout" stretch="5,1">
+     <layout class="QVBoxLayout" name="verticalLayout" stretch="7,2">
       <item>
        <widget class="QGroupBox" name="groupBoxLineChart">
         <property name="title">

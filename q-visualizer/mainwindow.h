@@ -22,6 +22,7 @@ public:
     void DisplayLineChart(QLineSeries *series, int minVal, int maxVal);
     int ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal);
     int GetDBFromSFTP();
+    time_t DateStringToSecSinceEpoch(const char *time_str);
 
 private slots:
      void on_pushButtonLoad_clicked();
