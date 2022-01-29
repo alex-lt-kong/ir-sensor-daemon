@@ -1,3 +1,6 @@
+# bak db
+# *.sqlite.bak
+
 # C++ objects and libs
 *.slo
 *.lo

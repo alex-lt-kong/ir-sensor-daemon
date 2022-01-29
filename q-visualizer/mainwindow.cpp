@@ -1,53 +1,38 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include <chrono>
+#include <curl/curl.h>
 #include <QtCharts>
 #include <iostream>
-#include <sqlite3.h>
-#include <curl/curl.h>
 #include <QApplication>
 #include <QThread>
+#include <qprocess.h>
+#include <sqlite3.h>
+#include <time.h>
 
 using namespace std;
 
-struct FtpFile {
-  const char *filename;
-  FILE *stream;
-};
-
-static size_t my_fwrite(void *buffer, size_t size, size_t nmemb,
-                        void *stream)
-{
-  struct FtpFile *out = (struct FtpFile *)stream;
-  if(!out->stream) {
-    /* open file for writing */
-    out->stream = fopen(out->filename, "wb");
-    if(!out->stream)
-      return -1; /* failure, cannot open file to write */
-  }
-  return fwrite(buffer, size, nmemb, out->stream);
-}
-
-
-int MainWindow::getDBFromSFTP()
+int MainWindow::GetDBFromSFTP()
 {
     QSettings settings("ak-studio", "ir-sensor-monitor");
     // ~/.config/ak-studio/ir-sensor-monitor.conf
     CURL *curl;
     CURLcode res;
-    struct FtpFile ftpfile = {
-      "detection-records.sqlite", /* name to store the file as if successful */
-      NULL
-    };
-
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
+    FILE *sftpFilePtr = fopen(this->dbName.c_str(), "wb");
+    if (sftpFilePtr == NULL) {
+        this->ui->plainTextEdit->insertPlainText(("Failed to open database file " + this->dbName + "\n").c_str());
+        return 1;
+    }
     curl = curl_easy_init();
     if(curl) {
       curl_easy_setopt(curl, CURLOPT_URL, settings.value("SFTP_URI").toString().toStdString().c_str());
-      /* Define our callback to get called when there's data to be written */
-      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, my_fwrite);
-      /* Set a pointer to our struct to pass to the callback */
-      curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ftpfile);
+      //curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteDataToFile);
+      // WriteDataToFile() gets called by libcurl as soon as there is data received that needs to be saved.
+      // For most transfers, this callback gets called many times and each invoke delivers another chunk of data.
+      curl_easy_setopt(curl, CURLOPT_WRITEDATA, sftpFilePtr);
+      // ftpfile: pointer that points to a struct used by WriteDataToFile to
       curl_easy_setopt(curl, CURLOPT_SSH_HOST_PUBLIC_KEY_MD5, settings.value("MD5").toString().toStdString().c_str());
       curl_easy_setopt(curl, CURLOPT_SSH_AUTH_TYPES, CURLSSH_AUTH_PUBLICKEY);
       // the public/private key pair has to be in PEM format
@@ -55,23 +40,22 @@ int MainWindow::getDBFromSFTP()
       // by default!
       curl_easy_setopt(curl, CURLOPT_SSH_PUBLIC_KEYFILE , settings.value("SFTP_public_key").toString().toStdString().c_str());
       curl_easy_setopt(curl, CURLOPT_SSH_PRIVATE_KEYFILE, settings.value("SFTP_private_key").toString().toStdString().c_str());
-
-      /* Switch on full protocol/debug output */
       curl_easy_setopt(curl, CURLOPT_VERBOSE, this->ui->checkBoxVerboseLogging->isChecked() ? 1L : 0);
 
       res = curl_easy_perform(curl);
 
-      /* always cleanup */
+      // curl_easy_init() call MUST have a corresponding call to
+      // curl_easy_cleanup when the operation is complete.
       curl_easy_cleanup(curl);
 
       if(CURLE_OK != res) {
-        /* we failed */
-        cerr << "Error: cURL statue code: " << res << endl;
+        this->ui->plainTextEdit->insertPlainText("Error: cURL statue code: " + QString::number(res) + "\n");
       }
+    } else {
+        this->ui->plainTextEdit->insertPlainText("Failed to initilize a cURL instance\n");
+        return 1;
     }
-
-    if(ftpfile.stream)
-      fclose(ftpfile.stream); /* close the local file */
+    fclose (sftpFilePtr);
 
     curl_global_cleanup();
 
@@ -81,7 +65,7 @@ int MainWindow::getDBFromSFTP()
 int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
 {
     sqlite3* dbPtr;
-    int retval = sqlite3_open("./detection-records.sqlite", &dbPtr);
+    int retval = sqlite3_open("detection-records.sqlite", &dbPtr);
     if (retval != SQLITE_OK) {
         cerr << "Unable to open the DB: " << sqlite3_errmsg(dbPtr) << endl;
         return (retval);
@@ -115,9 +99,10 @@ int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
         series->append(momentInTime.toMSecsSinceEpoch(), count);
         if (minVal > count) minVal = count;
         if (maxVal < count) maxVal = count;
-        delete[] year;
-        delete[] month;
-        delete[] day;
+        //delete[] year;
+        //delete[] month;
+        //delete[] day;
+        // seems cannot delete[] year,month,day...
         // The series must have at least two data points for the plotting function to work.
     }
     if (retval != SQLITE_DONE) {
@@ -131,16 +116,23 @@ int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
 
 void MainWindow::DisplayLineChart(QLineSeries *series, int minVal, int maxVal)
 {
-    QChart *chart = new QChart();
-    chart->legend()->hide();
-    chart->addSeries(series);
-    chart->setTitle("Detection Count by Date");
+    QChart *oldChart = this->chart;
+    // The logic here is a bit confusing: we first create a new pointer to
+    // store the address of the old chart object, then we recreate a new
+    // chart object to render new line chart. AFTER we call graphicsView->setChart(this->chart);
+    // we can safely deallocate old chart's memory...
+
+    this->chart = new QChart();
+    this->chart->legend()->hide();
+    this->chart->addSeries(series);
+    this->chart->setMargins(QMargins(0,0,0,0));
+    this->chart->setTitle("Detection Count by Date");
 
     QDateTimeAxis *axisX = new QDateTimeAxis;
     axisX->setTickCount(3);
     axisX->setFormat("yyyy-MM-dd");
     axisX->setTitleText("Date");
-    chart->addAxis(axisX, Qt::AlignBottom);
+    this->chart->addAxis(axisX, Qt::AlignBottom);
     series->attachAxis(axisX);
 
     QValueAxis *axisY = new QValueAxis;
@@ -148,12 +140,18 @@ void MainWindow::DisplayLineChart(QLineSeries *series, int minVal, int maxVal)
     axisY->setTitleText("Detection Count");
     axisY->setMin(minVal * 0.5);
     axisY->setMax(maxVal * 1.1);
-    chart->addAxis(axisY, Qt::AlignLeft);
+    this->chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
     // this graphicsView is "promoted to" a QChartView
     // https://stackoverflow.com/questions/48362864/how-to-insert-qchartview-in-form-with-qt-designer
-    this->ui->graphicsView->setChart(chart);
+    this->ui->graphicsView->setChart(this->chart);
+    this->ui->graphicsView->setRubberBand(QChartView::NoRubberBand);
+
+    delete oldChart;
+    // The C++ standard does not specify any relation between new/delete and the
+    // C memory allocation routines, but new and delete are typically implemented
+    // as wrappers around malloc and free
 
 }
 
@@ -164,6 +162,15 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 }
 
+QString MainWindow::GetFormattedDateTime() {
+
+    time_t now;
+    time(&now);
+    char timeBuffer[sizeof("[1970-01-01 00:00:00] ")];
+    strftime(timeBuffer, sizeof timeBuffer,"[%F %T] ", localtime(&now));
+    return QString(timeBuffer);
+}
+
 MainWindow::~MainWindow()
 {
     delete ui;
@@ -172,10 +179,23 @@ MainWindow::~MainWindow()
 void MainWindow::on_pushButtonLoad_clicked()
 {
     this->ui->pushButtonLoad->setEnabled(false);
-    this->ui->plainTextEdit->insertPlainText("Fetching database file from remote...\n");
     qApp->processEvents();
-    this->getDBFromSFTP();
-    this->ui->plainTextEdit->insertPlainText("Done\n");
+
+    if(rename(this->dbName.c_str(), (this->dbName + ".bak").c_str()) < 0) {
+        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Failed moving existing database to ");
+        ui->plainTextEdit->insertPlainText((this->dbName + ".bak: " + strerror(errno) + "\n").c_str());
+    } else {
+        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Moved existing database to ");
+        ui->plainTextEdit->insertPlainText((this->dbName + ".bak\n").c_str());
+    }
+    qApp->processEvents();
+
+    this->ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Fetching latest database file from remote...\n");
+    qApp->processEvents();
+    this->GetDBFromSFTP();
+    this->ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Done\n");
+    qApp->processEvents();
+    this->ui->plainTextEdit->verticalScrollBar()->setValue(ui->plainTextEdit->verticalScrollBar()->maximum() - 1);
     QLineSeries *series = new QLineSeries();
     int minVal = 2147483647, maxVal= 0;
     this->ReadDataFromDB(series, minVal, maxVal);

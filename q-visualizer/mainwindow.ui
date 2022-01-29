@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>QVisualizer</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>resources/line-chart.png</normaloff>resources/line-chart.png</iconset>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
