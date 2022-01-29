@@ -19,8 +19,8 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    void DisplayLineChart(QLineSeries *series, int minVal, int maxVal);
-    int ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal);
+    void DisplayLineChart();
+    int ReadDataFromDB();
     int GetDBFromSFTP();
     time_t DateStringToSecSinceEpoch(const char *time_str);
 
@@ -28,6 +28,10 @@ private slots:
      void on_pushButtonLoad_clicked();
 
 private:
+    QLineSeries *seriesOriginal = new QLineSeries();
+    int minVal = 2147483647;
+    int maxVal = 0;
+    QSplineSeries *seriesMA = new QSplineSeries();
     Ui::MainWindow *ui;
     QChart *chart = NULL;
     // Should be set to NULL otherwise delete chart may lead to segment fault

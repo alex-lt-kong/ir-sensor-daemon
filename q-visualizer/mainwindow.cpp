@@ -74,12 +74,12 @@ time_t MainWindow::DateStringToSecSinceEpoch(const char *time_str)
 }
 
 
-int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
+int MainWindow::ReadDataFromDB()
 {
     sqlite3* dbPtr;
     int retval = sqlite3_open("detection-records.sqlite", &dbPtr);
     if (retval != SQLITE_OK) {
-        cerr << "Unable to open the DB: " << sqlite3_errmsg(dbPtr) << endl;
+        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "SQLite3 error: " + sqlite3_errmsg(dbPtr) + "\n");
         return (retval);
     }
     string query = "SELECT DATE(timestamp) AS 'Date', COUNT(*) AS 'RecordCount' "
@@ -89,24 +89,36 @@ int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
     sqlite3_stmt *stmt;
     retval = sqlite3_prepare_v2(dbPtr, query.c_str(), -1, &stmt, NULL);
     if (retval != SQLITE_OK) {
-        cerr << "error: " << sqlite3_errmsg(dbPtr) << endl;
+        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "SQLite3 error: " + sqlite3_errmsg(dbPtr) + "\n");
         sqlite3_close(dbPtr);
         return (retval);
     }
+
+    seriesOriginal->clear();
+    seriesOriginal->setName("Raw Value/原始值");
+    seriesMA->clear();
+    seriesMA->setName("Moving Average/移动平均");
+
+    int count = 0;
+    float totalVal = 0;
     while ((retval = sqlite3_step(stmt)) == SQLITE_ROW) {
+        count ++;
         const unsigned char *date = sqlite3_column_text(stmt, 0);
         // `unsigned char` is a character datatype where the variable consumes all the 8
         // bits of the memory and there is no sign bit (which is there in signed char);
         // `char` may be unsigned or signed depending on your platform;
         // In C, `char` is just another integral type
-        int count = sqlite3_column_int(stmt, 1);
-        series->append(DateStringToSecSinceEpoch((char*)date) * 1000, count);
-        if (minVal > count) minVal = count;
-        if (maxVal < count) maxVal = count;
+        float val = sqlite3_column_int(stmt, 1);
+        totalVal += val;
+        seriesOriginal->append(DateStringToSecSinceEpoch((char*)date) * 1000, val);
+        seriesMA->append(DateStringToSecSinceEpoch((char*)date) * 1000, totalVal / count);
+
+        if (minVal > val) minVal = val;
+        if (maxVal < val) maxVal = val;
         // The series must have at least two data points for the plotting function to work.
     }
     if (retval != SQLITE_DONE) {
-        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "SQLite3 error: " + sqlite3_errmsg(dbPtr));
+        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "SQLite3 error: " + sqlite3_errmsg(dbPtr) + "\n");
     }
     sqlite3_finalize(stmt);
     sqlite3_close(dbPtr);
@@ -114,7 +126,7 @@ int MainWindow::ReadDataFromDB(QLineSeries *series, int &minVal, int &maxVal)
     return retval;
 }
 
-void MainWindow::DisplayLineChart(QLineSeries *series, int minVal, int maxVal)
+void MainWindow::DisplayLineChart()
 {
     QChart *oldChart = this->chart;
     // The logic here is a bit confusing: we first create a new pointer to
@@ -123,25 +135,27 @@ void MainWindow::DisplayLineChart(QLineSeries *series, int minVal, int maxVal)
     // we can safely deallocate old chart's memory...
 
     this->chart = new QChart();
-    this->chart->legend()->hide();
-    this->chart->addSeries(series);
+    this->chart->addSeries(seriesMA);
+    this->chart->addSeries(seriesOriginal);
     this->chart->setMargins(QMargins(0,0,0,0));
-    this->chart->setTitle("Detection Count by Date");
+    this->chart->setTitle("Detection Count by Date/每日侦测数");
 
     QDateTimeAxis *axisX = new QDateTimeAxis;
-    axisX->setTickCount(3);
+    axisX->setTickCount(5);
     axisX->setFormat("yyyy-MM-dd");
-    axisX->setTitleText("Date");
+    axisX->setTitleText("Date/日期");
     this->chart->addAxis(axisX, Qt::AlignBottom);
-    series->attachAxis(axisX);
+    seriesOriginal->attachAxis(axisX);
+    seriesMA->attachAxis(axisX);
 
     QValueAxis *axisY = new QValueAxis;
     axisY->setLabelFormat("%i");
-    axisY->setTitleText("Detection Count");
+    axisY->setTitleText("Detection Count/侦测数");
     axisY->setMin(minVal * 0.5);
     axisY->setMax(maxVal * 1.1);
     this->chart->addAxis(axisY, Qt::AlignLeft);
-    series->attachAxis(axisY);
+    seriesOriginal->attachAxis(axisY);
+    seriesMA->attachAxis(axisY);
 
     // this graphicsView is "promoted to" a QChartView
     // https://stackoverflow.com/questions/48362864/how-to-insert-qchartview-in-form-with-qt-designer
@@ -199,10 +213,9 @@ void MainWindow::on_pushButtonLoad_clicked()
     qApp->processEvents();
 
     this->ui->plainTextEdit->verticalScrollBar()->setValue(ui->plainTextEdit->verticalScrollBar()->maximum() - 1);
-    QLineSeries *series = new QLineSeries();
-    int minVal = 2147483647, maxVal= 0;
-    this->ReadDataFromDB(series, minVal, maxVal);
-    this->DisplayLineChart(series, minVal, maxVal);
+
+    this->ReadDataFromDB();
+    this->DisplayLineChart();
     this->ui->pushButtonLoad->setEnabled(true);
 }
 
