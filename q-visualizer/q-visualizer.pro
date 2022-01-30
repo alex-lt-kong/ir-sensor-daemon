@@ -28,3 +28,6 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 DISTFILES += \
     resources/line-chart.png
+
+RESOURCES += \
+    resources.qrc

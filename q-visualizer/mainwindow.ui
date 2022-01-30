@@ -14,8 +14,8 @@
    <string>QVisualizer</string>
   </property>
   <property name="windowIcon">
-   <iconset>
-    <normaloff>resources/line-chart.png</normaloff>resources/line-chart.png</iconset>
+   <iconset resource="resources.qrc">
+    <normaloff>:/icons/icons/line-chart.png</normaloff>:/icons/icons/line-chart.png</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2" stretch="5">
@@ -80,6 +80,13 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="pushButtonExit">
+            <property name="text">
+             <string>Exit</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </item>
        </layout>
@@ -96,6 +103,8 @@
    <header>QtCharts.h</header>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

@@ -27,14 +27,17 @@ public:
 private slots:
      void on_pushButtonLoad_clicked();
 
+     void on_pushButtonExit_clicked();
+
 private:
     QLineSeries *seriesOriginal = new QLineSeries();
     int minVal = 2147483647;
     int maxVal = 0;
     QSplineSeries *seriesMA = new QSplineSeries();
     Ui::MainWindow *ui;
-    QChart *chart = NULL;
-    // Should be set to NULL otherwise delete chart may lead to segment fault
+    QChart *chart = new QChart();
+    QDateTimeAxis *axisX = new QDateTimeAxis;
+    QValueAxis *axisY = new QValueAxis;
     string dbName = "detection-records.sqlite";
     QString GetFormattedDateTime();
 };

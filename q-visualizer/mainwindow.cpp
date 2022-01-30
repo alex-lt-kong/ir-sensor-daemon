@@ -128,27 +128,28 @@ int MainWindow::ReadDataFromDB()
 
 void MainWindow::DisplayLineChart()
 {
-    QChart *oldChart = this->chart;
-    // The logic here is a bit confusing: we first create a new pointer to
-    // store the address of the old chart object, then we recreate a new
-    // chart object to render new line chart. AFTER we call graphicsView->setChart(this->chart);
-    // we can safely deallocate old chart's memory...
+    while (chart->series().length() > 0) {
+        chart->removeSeries(chart->series().at(0));
+        // chart->series()[0] is functionally okay, but results
+        // in the warning "Don't call QList::operator[] on temporary"
+        // https://stackoverflow.com/questions/48876448/dont-call-qstringoperator-on-temporary/48881232
+    }
+    while (chart->axes().length() > 0) {
+        chart->removeAxis(chart->axes().at(0));
+    }
 
-    this->chart = new QChart();
-    this->chart->addSeries(seriesMA);
-    this->chart->addSeries(seriesOriginal);
-    this->chart->setMargins(QMargins(0,0,0,0));
-    this->chart->setTitle("Detection Count by Date/每日侦测数");
+    chart->addSeries(seriesMA);
+    chart->addSeries(seriesOriginal);
+    chart->setMargins(QMargins(0,0,0,0));
+    chart->setTitle("Detection Count by Date/每日侦测数");
 
-    QDateTimeAxis *axisX = new QDateTimeAxis;
-    axisX->setTickCount(5);
+    axisX->setTickCount(7);
     axisX->setFormat("yyyy-MM-dd");
     axisX->setTitleText("Date/日期");
-    this->chart->addAxis(axisX, Qt::AlignBottom);
+    chart->addAxis(axisX, Qt::AlignBottom);
     seriesOriginal->attachAxis(axisX);
     seriesMA->attachAxis(axisX);
 
-    QValueAxis *axisY = new QValueAxis;
     axisY->setLabelFormat("%i");
     axisY->setTitleText("Detection Count/侦测数");
     axisY->setMin(minVal * 0.5);
@@ -160,13 +161,8 @@ void MainWindow::DisplayLineChart()
     // this graphicsView is "promoted to" a QChartView
     // https://stackoverflow.com/questions/48362864/how-to-insert-qchartview-in-form-with-qt-designer
     this->ui->graphicsView->setChart(this->chart);
+    this->ui->graphicsView->setRenderHint(QPainter::Antialiasing);
     this->ui->graphicsView->setRubberBand(QChartView::NoRubberBand);
-
-    delete oldChart;
-    // The C++ standard does not specify any relation between new/delete and the
-    // C memory allocation routines, but new and delete are typically implemented
-    // as wrappers around malloc and free
-
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -193,6 +189,7 @@ MainWindow::~MainWindow()
 void MainWindow::on_pushButtonLoad_clicked()
 {
     this->ui->pushButtonLoad->setEnabled(false);
+    ui->pushButtonExit->setEnabled(false);
     qApp->processEvents();
 
     if(rename(this->dbName.c_str(), (this->dbName + ".bak").c_str()) < 0) {
@@ -217,5 +214,12 @@ void MainWindow::on_pushButtonLoad_clicked()
     this->ReadDataFromDB();
     this->DisplayLineChart();
     this->ui->pushButtonLoad->setEnabled(true);
+    ui->pushButtonExit->setEnabled(true);
+}
+
+
+void MainWindow::on_pushButtonExit_clicked()
+{
+    QApplication::quit();
 }
 
