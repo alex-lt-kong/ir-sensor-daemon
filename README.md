@@ -20,4 +20,4 @@ An IoT project built around HC-SR501 Passive Infrared sensor.
 
 #### Screenshot ####
 
-<imt src="images/q-visualizer.png">
+<img src="./images/q-visualizer.png">
