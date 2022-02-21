@@ -17,3 +17,7 @@ An IoT project built around HC-SR501 Passive Infrared sensor.
 
 * Read detection records from the SQLite database;
 * plot a linechart in C++/Qt;
+
+#### Screenshot ####
+
+<imt src="./images/q-visualizer.png">
