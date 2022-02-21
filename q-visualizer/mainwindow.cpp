@@ -21,7 +21,7 @@ int MainWindow::GetDBFromSFTP()
     CURLcode res;
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    FILE *sftpFilePtr = fopen(this->dbName.c_str(), "wb");
+    FILE *sftpFilePtr = fopen((this->tempDir.path().toStdString() + "/" + this->dbName.c_str()).c_str(), "wb");
     if (sftpFilePtr == NULL) {
         this->ui->plainTextEdit->insertPlainText(("Failed to open database file " + this->dbName + "\n").c_str());
         return 1;
@@ -77,7 +77,8 @@ time_t MainWindow::DateStringToSecSinceEpoch(const char *time_str)
 int MainWindow::ReadDataFromDB()
 {
     sqlite3* dbPtr;
-    int retval = sqlite3_open("detection-records.sqlite", &dbPtr);
+
+    int retval = sqlite3_open((this->tempDir.path().toStdString() + "/" + this->dbName.c_str()).c_str(), &dbPtr);
     if (retval != SQLITE_OK) {
         ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "SQLite3 error: " + sqlite3_errmsg(dbPtr) + "\n");
         return (retval);
@@ -170,6 +171,9 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    if (this->tempDir.isValid() == false) {
+        this->ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "tempDir is invalid: " + this->tempDir.errorString() + "\n");
+    }
 }
 
 QString MainWindow::GetFormattedDateTime() {
@@ -192,16 +196,7 @@ void MainWindow::on_pushButtonLoad_clicked()
     ui->pushButtonExit->setEnabled(false);
     qApp->processEvents();
 
-    if(rename(this->dbName.c_str(), (this->dbName + ".bak").c_str()) < 0) {
-        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Failed moving existing database to ");
-        ui->plainTextEdit->insertPlainText((this->dbName + ".bak: " + strerror(errno) + "\n").c_str());
-    } else {
-        ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Moved existing database to ");
-        ui->plainTextEdit->insertPlainText((this->dbName + ".bak\n").c_str());
-    }
-    qApp->processEvents();
-
-    this->ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Fetching latest database file from remote...\n");
+    this->ui->plainTextEdit->insertPlainText(this->GetFormattedDateTime() + "Fetching latest database file from remote to " + this->tempDir.path() + "...\n");
     this->ui->plainTextEdit->verticalScrollBar()->setValue(ui->plainTextEdit->verticalScrollBar()->maximum());
     qApp->processEvents();
 

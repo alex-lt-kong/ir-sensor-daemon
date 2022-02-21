@@ -39,6 +39,8 @@ private:
     QDateTimeAxis *axisX = new QDateTimeAxis;
     QValueAxis *axisY = new QValueAxis;
     string dbName = "detection-records.sqlite";
+    QTemporaryDir tempDir;
+
     QString GetFormattedDateTime();
 };
 #endif // MAINWINDOW_H
