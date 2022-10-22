@@ -49,7 +49,7 @@ def monitor_thread():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(signal_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    con = sqlite3.connect(os.path.join(app_dir, 'detection-records.sqlite'))
+    con = sqlite3.connect(os.path.join(app_dir, '..', 'detection-records.sqlite'))
     make_sure_table_exists(con)
     con.close()
 
