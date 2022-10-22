@@ -1,4 +1,4 @@
-# ir-sensor-monitor
+# ir-sensor-daemon
 
 An IoT project built around HC-SR501 Passive Infrared sensor.
 
