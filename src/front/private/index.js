@@ -73,6 +73,11 @@ class Reminder extends React.Component {
     const options = {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: 'nearest',
+        axis: 'x',
+        intersect: false
+      },
       scales: {
         xAxis: {
           grid: {display: false},
