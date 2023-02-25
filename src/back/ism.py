@@ -3,7 +3,6 @@
 import argparse
 import datetime as dt
 import logging
-import importlib
 import json
 import os
 import requests
@@ -24,12 +23,18 @@ settings = None
 stop_signal = False
 
 
-def make_sure_table_exists(con):
+def prepare_table(con: sqlite3.Connection):
     cur = con.cursor()
     cur.execute('''
-    CREATE TABLE IF NOT EXISTS DetectionRecords (
-        timestamp   TEXT)
+        CREATE TABLE IF NOT EXISTS DetectionRecords (
+            timestamp   TEXT
+        )
     ''')
+    con.commit()
+    cur.execute(f'''
+        DELETE FROM DetectionRecords
+        WHERE timestamp <= ?
+    ''', (dt.date.today() - dt.timedelta(days=60), ))
     con.commit()
 
 
@@ -49,8 +54,10 @@ def monitor_thread():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(signal_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    con = sqlite3.connect(os.path.join(app_dir, '..', '..', 'detection-records.sqlite'))
-    make_sure_table_exists(con)
+    con = sqlite3.connect(
+        os.path.join(app_dir, '..', '..', 'detection-records.sqlite')
+    )
+    prepare_table(con)
     con.close()
 
     while stop_signal is False:
@@ -69,7 +76,9 @@ def monitor_thread():
                              f'status_code: {r.status_code}, '
                              f'response_time: {response_time}ms')
 
-            con = sqlite3.connect(os.path.join(app_dir, '..', '..', 'detection-records.sqlite'))
+            con = sqlite3.connect(
+                os.path.join(app_dir, '..', '..', 'detection-records.sqlite')
+            )
             cur = con.cursor()
             cur.execute(
                 'INSERT INTO DetectionRecords (timestamp) VALUES (?);',
@@ -83,7 +92,7 @@ def monitor_thread():
         time.sleep(0.1)
 
 
-def main():
+def main() -> None:
 
     global settings, debug_mode
     ap = argparse.ArgumentParser()
@@ -108,15 +117,6 @@ def main():
     )
     logging.info(f'{app_name} started')
 
-    emailer = importlib.machinery.SourceFileLoader(
-                        'emailer',
-                        settings['email']['path']).load_module()
-    th_email = threading.Thread(target=emailer.send_service_start_notification,
-                                kwargs={'settings_path': settings_path,
-                                        'service_name': f'{app_name}',
-                                        'path_of_logs_to_send': settings['app']['log_path'],
-                                        'delay': 0 if debug_mode else 300})
-    th_email.start()
     th_monitor = threading.Thread(target=monitor_thread, args=())
     th_monitor.start()
 
