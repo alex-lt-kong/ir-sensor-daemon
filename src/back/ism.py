@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from elasticsearch import Elasticsearch
 
 import argparse
 import datetime as dt
@@ -8,11 +9,11 @@ import os
 import requests
 import RPi.GPIO as GPIO
 import signal
+import socket
 import sqlite3
 import sys
 import threading
 import time
-
 
 # app_dir: the app's real address on the filesystem
 app_dir = os.path.dirname(os.path.realpath(__file__))
@@ -44,7 +45,6 @@ def stop_signal_handler(*args):
     stop_signal = True
     logging.info(f'Signal [{args[0]}] received, exiting')
     sys.exit(0)
-
 
 def monitor_thread():
 
@@ -85,7 +85,6 @@ def monitor_thread():
                 [dt.datetime.now()])
             con.commit()
             con.close()
-            
             time.sleep(1)
         else:
             logging.debug('human NOT detected')
